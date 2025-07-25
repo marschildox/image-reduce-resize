@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Resizer & Compressor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .progress-bar {
+            height: 6px;
+            border-radius: 3px;
+            background-color: #e2e8f0;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #4f46e5;
+            transition: width 0.3s ease;
+        }
+        .image-preview {
+            transition: all 0.3s ease;
+        }
+        .image-preview:hover {
+            transform: scale(1.03);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .url-item {
+            position: relative;
+        }
+        .url-item:hover .remove-url {
+            opacity: 1;
+        }
+        .remove-url {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-indigo-700 mb-2">Image Resizer & Compressor</h1>
+            <p class="text-gray-600">Quickly resize and compress multiple images from URLs</p>
+        </header>
+
+        <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+            <div class="mb-6">
+                <label for="imageUrls" class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-link mr-2"></i>Paste image URLs or text containing URLs:
+                </label>
+                <textarea id="imageUrls" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Paste one or multiple image URLs here (one per line or separated by spaces)"></textarea>
+                <button id="extractBtn" class="mt-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition flex items-center">
+                    <i class="fas fa-magnifying-glass mr-2"></i> Extract Images
+                </button>
+            </div>
+
+            <div id="urlListContainer" class="hidden mb-6">
+                <h3 class="text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-list-check mr-2"></i>Detected Image URLs:
+                </h3>
+                <div id="urlList" class="border border-gray-200 rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50"></div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                    <label for="width" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-expand mr-2"></i>Output Width (px):
+                    </label>
+                    <input type="number" id="width" value="936" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="height" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-compress mr-2"></i>Output Height (px):
+                    </label>
+                    <input type="number" id="height" value="568" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label for="maxSize" class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-weight-hanging mr-2"></i>Maximum File Size (KB):
+                </label>
+                <input type="number" id="maxSize" value="100" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+
+            <div class="mb-6">
+                <label for="suffix" class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-tag mr-2"></i>Filename Suffix:
+                </label>
+                <input type="text" id="suffix" placeholder="-resized" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-file-image mr-2"></i>Output Formats:
+                </label>
+                <div class="flex flex-wrap gap-4">
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" class="form-checkbox text-indigo-600" name="outputFormat" value="jpeg" checked>
+                        <span class="ml-2 text-gray-700">JPEG</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" class="form-checkbox text-indigo-600" name="outputFormat" value="png">
+                        <span class="ml-2 text-gray-700">PNG</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" class="form-checkbox text-indigo-600" name="outputFormat" value="webp">
+                        <span class="ml-2 text-gray-700">WebP</span>
+                    </label>
+                </div>
+            </div>
+
+            <button id="processBtn" class="w-full bg-indigo-600 text-white px-4 py-3 rounded-md hover:bg-indigo-700 transition flex items-center justify-center disabled:opacity-50" disabled>
+                <i class="fas fa-gears mr-2"></i> Process & Download Images
+            </button>
+        </div>
+
+        <div id="statusContainer" class="hidden bg-white rounded-xl shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-spinner fa-spin mr-2 text-indigo-600"></i> Processing Images
+            </h2>
+            <div class="progress-bar mb-4">
+                <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <p id="statusText" class="text-gray-600 mb-2">Preparing to process images...</p>
+            <p id="fileCounter" class="text-sm text-gray-500">0/0 files processed</p>
+        </div>
+
+        <div id="previewContainer" class="hidden bg-white rounded-xl shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-images mr-2 text-indigo-600"></i> Image Previews
+            </h2>
+            <div id="imagePreviews" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
+        <div id="errorContainer" class="hidden bg-red-50 border-l-4 border-red-500 p-4 mb-8 rounded">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-circle text-red-500 mt-1"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800" id="errorTitle">Error</h3>
+                    <div class="mt-2 text-sm text-red-700" id="errorMessage"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const imageUrlsTextarea = document.getElementById('imageUrls');
+            const extractBtn = document.getElementById('extractBtn');
+            const urlListContainer = document.getElementById('urlListContainer');
+            const urlList = document.getElementById('urlList');
+            const processBtn = document.getElementById('processBtn');
+            const statusContainer = document.getElementById('statusContainer');
+            const progressFill = document.getElementById('progressFill');
+            const statusText = document.getElementById('statusText');
+            const fileCounter = document.getElementById('fileCounter');
+            const previewContainer = document.getElementById('previewContainer');
+            const imagePreviews = document.getElementById('imagePreviews');
+            const errorContainer = document.getElementById('errorContainer');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            let detectedUrls = [];
+            let processedImages = [];
+
+            // Extract image URLs from text
+            extractBtn.addEventListener('click', function() {
+                const text = imageUrlsTextarea.value.trim();
+                if (!text) {
+                    showError('Please paste some URLs or text containing image URLs');
+                    return;
+                }
+
+                // Extract URLs using regex
+                const urlRegex = /(https?:\/\/[^\s]+?\.(?:jpg|jpeg|png|gif|webp|bmp)(?:\?[^\s]*)?)/gi;
+                const urls = text.match(urlRegex) || [];
+                
+                if (urls.length === 0) {
+                    showError('No valid image URLs found. Make sure URLs end with .jpg, .jpeg, .png, .gif, .webp, or .bmp');
+                    return;
+                }
+
+                detectedUrls = [...new Set(urls)]; // Remove duplicates
+                renderUrlList();
+                processBtn.disabled = false;
+                hideError();
+            });
+
+            // Render the list of detected URLs
+            function renderUrlList() {
+                urlList.innerHTML = '';
+                
+                if (detectedUrls.length === 0) {
+                    urlListContainer.classList.add('hidden');
+                    return;
+                }
+                
+                urlListContainer.classList.remove('hidden');
+                
+                detectedUrls.forEach((url, index) => {
+                    const urlItem = document.createElement('div');
+                    urlItem.className = 'url-item flex items-center justify-between p-2 hover:bg-gray-100 rounded';
+                    
+                    const urlText = document.createElement('span');
+                    urlText.className = 'text-sm text-gray-700 truncate';
+                    urlText.textContent = url;
+                    urlText.title = url;
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-url text-red-500 hover:text-red-700 ml-2';
+                    removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                    removeBtn.addEventListener('click', () => {
+                        detectedUrls.splice(index, 1);
+                        renderUrlList();
+                        if (detectedUrls.length === 0) {
+                            processBtn.disabled = true;
+                        }
+                    });
+                    
+                    urlItem.appendChild(urlText);
+                    urlItem.appendChild(removeBtn);
+                    urlList.appendChild(urlItem);
+                });
+            }
+
+            // Process and download images
+            processBtn.addEventListener('click', async function() {
+                if (detectedUrls.length === 0) {
+                    showError('No images to process. Please extract some image URLs first.');
+                    return;
+                }
+
+                const width = parseInt(document.getElementById('width').value) || 936;
+                const height = parseInt(document.getElementById('height').value) || 568;
+                const maxSize = parseInt(document.getElementById('maxSize').value) || 100;
+                const suffix = document.getElementById('suffix').value.trim() || `-${width}x${height}`;
+                const folderName = `${width}x${height}`;
+
+                // Reset UI
+                processedImages = [];
+                imagePreviews.innerHTML = '';
+                previewContainer.classList.add('hidden');
+                statusContainer.classList.remove('hidden');
+                progressFill.style.width = '0%';
+                statusText.textContent = 'Starting image processing...';
+                fileCounter.textContent = `0/${detectedUrls.length} files processed`;
+                processBtn.disabled = true;
+
+                try {
+                    // Process each image
+                    for (let i = 0; i < detectedUrls.length; i++) {
+                        const url = detectedUrls[i];
+                        statusText.textContent = `Processing image ${i + 1} of ${detectedUrls.length}...`;
+                        fileCounter.textContent = `${i}/${detectedUrls.length} files processed`;
+                        progressFill.style.width = `${(i / detectedUrls.length) * 100}%`;
+
+                        try {
+                            const processedImagesBatch = await processImage(url, width, height, maxSize, suffix);
+                            processedImages.push(...processedImagesBatch);
+                            
+                            // Update progress
+                            progressFill.style.width = `${((i + 1) / detectedUrls.length) * 100}%`;
+                            fileCounter.textContent = `${i + 1}/${detectedUrls.length} files processed`;
+                            
+                            // Add preview
+                            addImagePreview(processedImage);
+                        } catch (error) {
+                            console.error(`Error processing image ${url}:`, error);
+                            // Continue with next image even if one fails
+                        }
+                    }
+
+                    statusText.textContent = 'All images processed successfully!';
+                    
+                    // Create zip and download
+                    if (processedImages.length > 0) {
+                        statusText.textContent = 'Preparing download...';
+                        await downloadImages(processedImages, folderName);
+                        statusText.textContent = `Download complete! ${processedImages.length} images processed.`;
+                        previewContainer.classList.remove('hidden');
+                    } else {
+                        showError('No images were successfully processed.');
+                    }
+                } catch (error) {
+                    console.error('Error during processing:', error);
+                    showError('An error occurred during processing: ' + error.message);
+                } finally {
+                    processBtn.disabled = false;
+                }
+            });
+
+            // Process a single image
+            async function processImage(url, width, height, maxSizeKB, suffix) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.crossOrigin = 'Anonymous';
+                    
+                    img.onload = function() {
+                        // Create canvas for resizing
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Draw image to canvas (resizing)
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        // Get filename from URL
+                        let filename = url.substring(url.lastIndexOf('/') + 1);
+                        const dotIndex = filename.lastIndexOf('.');
+                        
+                        // Get selected formats
+                        const formatCheckboxes = document.querySelectorAll('input[name="outputFormat"]:checked');
+                        if (formatCheckboxes.length === 0) {
+                            reject(new Error('Please select at least one output format'));
+                            return;
+                        }
+                        
+                        const processedImages = [];
+                        
+                        formatCheckboxes.forEach(checkbox => {
+                            const format = checkbox.value;
+                            let extension, mimeType;
+                            
+                            switch(format) {
+                                case 'jpeg':
+                                    extension = 'jpg';
+                                    mimeType = 'image/jpeg';
+                                    break;
+                                case 'png':
+                                    extension = 'png';
+                                    mimeType = 'image/png';
+                                    break;
+                                case 'webp':
+                                    extension = 'webp';
+                                    mimeType = 'image/webp';
+                                    break;
+                            }
+                            
+                            let outputFilename;
+                            if (dotIndex !== -1) {
+                                outputFilename = filename.substring(0, dotIndex) + suffix + '.' + extension;
+                            } else {
+                                outputFilename = filename + suffix + '.' + extension;
+                            }
+                            
+                            // Compress image
+                            let quality = 0.9;
+                            let dataUrl;
+                            let blob;
+                            let fileSizeKB;
+                            
+                            // Try to meet the max size requirement
+                            do {
+                                dataUrl = canvas.toDataURL(mimeType, format === 'png' ? undefined : quality);
+                                blob = dataURLToBlob(dataUrl);
+                                fileSizeKB = blob.size / 1024;
+                                quality -= 0.1;
+                                
+                                if (quality < 0.1) break; // Minimum quality
+                            } while (fileSizeKB > maxSizeKB && quality > 0);
+                            
+                            processedImages.push({
+                                originalUrl: url,
+                                filename: outputFilename,
+                                dataUrl: dataUrl,
+                                blob: blob,
+                                sizeKB: fileSizeKB.toFixed(2),
+                                dimensions: `${width}x${height}`,
+                                format: format
+                            });
+                        });
+                        
+                        resolve(processedImages);
+                    };
+                    
+                    img.onerror = function() {
+                        reject(new Error(`Failed to load image from URL: ${url}`));
+                    };
+                    
+                    img.src = url;
+                });
+            }
+
+            // Download all images as a zip
+            async function downloadImages(images, folderName) {
+                return new Promise((resolve, reject) => {
+                    try {
+                        statusText.textContent = 'Creating ZIP archive...';
+                        
+                        const zip = new JSZip();
+                        const folder = zip.folder(folderName);
+                        
+                        // Add each image to the zip
+                        images.forEach(image => {
+                            const blob = dataURLToBlob(image.dataUrl);
+                            folder.file(image.filename, blob);
+                        });
+                        
+                        // Generate the zip file
+                        zip.generateAsync({type: 'blob'})
+                            .then(content => {
+                                saveAs(content, `${folderName}_images.zip`);
+                                resolve();
+                            })
+                            .catch(error => {
+                                reject(error);
+                            });
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            }
+
+            // Add image preview to the UI
+            function addImagePreview(image) {
+                const previewDiv = document.createElement('div');
+                previewDiv.className = 'image-preview bg-gray-50 rounded-lg overflow-hidden border border-gray-200';
+                
+                const img = document.createElement('img');
+                img.src = image.dataUrl;
+                img.alt = image.filename;
+                img.className = 'w-full h-32 object-cover';
+                
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'p-2';
+                
+                const filenameP = document.createElement('p');
+                filenameP.className = 'text-xs font-medium text-gray-700 truncate';
+                filenameP.textContent = image.filename;
+                
+                const sizeP = document.createElement('p');
+                sizeP.className = 'text-xs text-gray-500';
+                sizeP.textContent = `${image.dimensions} | ${image.sizeKB} KB`;
+                
+                infoDiv.appendChild(filenameP);
+                infoDiv.appendChild(sizeP);
+                previewDiv.appendChild(img);
+                previewDiv.appendChild(infoDiv);
+                
+                imagePreviews.appendChild(previewDiv);
+            }
+
+            // Helper function to convert data URL to blob
+            function dataURLToBlob(dataUrl) {
+                const arr = dataUrl.split(',');
+                const mime = arr[0].match(/:(.*?);/)[1];
+                const bstr = atob(arr[1]);
+                let n = bstr.length;
+                const u8arr = new Uint8Array(n);
+                
+                while (n--) {
+                    u8arr[n] = bstr.charCodeAt(n);
+                }
+                
+                return new Blob([u8arr], { type: mime });
+            }
+
+            // Show error message
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorContainer.classList.remove('hidden');
+                setTimeout(hideError, 8000);
+            }
+
+            // Hide error message
+            function hideError() {
+                errorContainer.classList.add('hidden');
+            }
+        });
+    </script>
+<p style="border-radius: 8px; text-align: center; font-size: 12px; color: #fff; margin-top: 16px;position: fixed; left: 8px; bottom: 8px; z-index: 10; background: rgba(0, 0, 0, 0.8); padding: 4px 8px;">Made with <img src="https://enzostvs-deepsite.hf.space/logo.svg" alt="DeepSite Logo" style="width: 16px; height: 16px; vertical-align: middle;display:inline-block;margin-right:3px;filter:brightness(0) invert(1);"><a href="https://enzostvs-deepsite.hf.space" style="color: #fff;text-decoration: underline;" target="_blank" >DeepSite</a> - 🧬 <a href="https://enzostvs-deepsite.hf.space?remix=craniis/split-testing-tool" style="color: #fff;text-decoration: underline;" target="_blank" >Remix</a></p><p style="border-radius: 8px; text-align: center; font-size: 12px; color: #fff; margin-top: 16px;position: fixed; left: 8px; bottom: 8px; z-index: 10; background: rgba(0, 0, 0, 0.8); padding: 4px 8px;">Made with <img src="https://enzostvs-deepsite.hf.space/logo.svg" alt="DeepSite Logo" style="width: 16px; height: 16px; vertical-align: middle;display:inline-block;margin-right:3px;filter:brightness(0) invert(1);"><a href="https://enzostvs-deepsite.hf.space" style="color: #fff;text-decoration: underline;" target="_blank" >DeepSite</a> - 🧬 <a href="https://enzostvs-deepsite.hf.space?remix=craniis/resize-reduce" style="color: #fff;text-decoration: underline;" target="_blank" >Remix</a></p></body>
+</html>
